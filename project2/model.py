@@ -8,7 +8,7 @@ class Model:
         self.min_match_thresh = {'cat': 8, 'calculator': 50}
         self.LOWE_RATIO = 0.6
 
-        self.sift = cv2.SIFT_create(contrastThreshold=0.04, edgeThreshold=20)
+        self.sift = cv2.SIFT_create(contrastThreshold=0.04, edgeThreshold=30)
 
         self.labels = list()
         self.templates_features = dict() # {'label': list of (keypoints, descriptors) for each image in label dir}
@@ -30,15 +30,15 @@ class Model:
 
     def get_matches(self, query_des, template_des):
         # Brute Force Matcher
-        # bf = cv2.BFMatcher(cv2.NORM_L1, crossCheck=False)
-        # matches = bf.knnMatch(template_des, query_des, k=2)
+        bf = cv2.BFMatcher(cv2.NORM_L1, crossCheck=False)
+        matches = bf.knnMatch(template_des, query_des, k=2)
 
         # FLANN Matcher
-        FLANNINDEXKDTREE = 0
-        index_params = dict(algorithm=FLANNINDEXKDTREE, trees=5)
-        search_params = dict(checks=50)
-        flann = cv2.FlannBasedMatcher(index_params, search_params)
-        matches = flann.knnMatch(template_des, query_des, k=2)
+        # FLANNINDEXKDTREE = 1
+        # index_params = dict(algorithm=FLANNINDEXKDTREE, trees=5)
+        # search_params = dict(checks=50)
+        # flann = cv2.FlannBasedMatcher(index_params, search_params)
+        # matches = flann.knnMatch(template_des, query_des, k=2)
 
         # Lowe's ratio test
         good_matches = []
@@ -77,11 +77,11 @@ class Model:
                     continue
 
                 # Transform object keypoints to scene coordinates
-                template_pts = np.float32([template_kp[m.queryIdx].pt for m in max_matches]).reshape(-1, 1, 2)
-                template_pts = cv2.perspectiveTransform(template_pts, M)
+                template_pts = np.float32([kp.pt for kp in template_kp]).reshape(-1, 1, 2)
+                query_pts = cv2.perspectiveTransform(template_pts, M)
 
                 # Find the bounding box coordinates
-                x, y, w, h = cv2.boundingRect(template_pts)
+                x, y, w, h = cv2.boundingRect(query_pts)
                 prediction[label] = [(x, y), (x + w, y + h)]
             else:
                 if self.print_message: print('%-16s Not enough keypoints match are found - %d/%d' % (label, len(max_matches), self.min_match_thresh[label]))
