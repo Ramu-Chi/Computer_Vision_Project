@@ -5,10 +5,10 @@ import os
 class Model:
     def __init__(self):
         # self.MIN_MATCH_COUNT = 10
-        self.min_match_thresh = {'cat': 8, 'calculator': 50}
+        self.min_match_thresh = {'cat': 10, 'calculator': 50}
         self.LOWE_RATIO = 0.6
 
-        self.sift = cv2.SIFT_create(contrastThreshold=0.04, edgeThreshold=30)
+        self.sift = cv2.SIFT_create(contrastThreshold=0.05, edgeThreshold=80)
 
         self.labels = list()
         self.templates_features = dict() # {'label': list of (keypoints, descriptors) for each image in label dir}
@@ -49,6 +49,7 @@ class Model:
         return good_matches
     
     def predict(self, query_gray_img):
+        H, W = query_gray_img.shape
         query_kp, query_des = self.sift.detectAndCompute(query_gray_img, None)
         prediction = dict.fromkeys(self.labels)
 
@@ -67,7 +68,7 @@ class Model:
                 if self.print_message: print('%-16s %d keypoints match' % (label, len(max_matches)))
                 template_kp, template_des = self.templates_features[label][max_idx]
 
-                # Find the homography matrix
+                # Find the transformation matrix
                 template_pts = np.float32([template_kp[m.queryIdx].pt for m in max_matches]).reshape(-1, 1, 2)
                 query_pts = np.float32([query_kp[m.trainIdx].pt for m in max_matches]).reshape(-1, 1, 2)
                 M, mask = cv2.findHomography(template_pts, query_pts, cv2.RANSAC, 5.0)
@@ -76,13 +77,15 @@ class Model:
                     if self.print_message: print('%-16s Not enought inliers to calculate homography matrix' % '')
                     continue
 
-                # Transform object keypoints to scene coordinates
+                # Transform template keypoints to query coordinates
                 template_pts = np.float32([kp.pt for kp in template_kp]).reshape(-1, 1, 2)
                 query_pts = cv2.perspectiveTransform(template_pts, M)
 
                 # Find the bounding box coordinates
                 x, y, w, h = cv2.boundingRect(query_pts)
-                prediction[label] = [(x, y), (x + w, y + h)]
+                xmin, ymin = max(0, x), max(0, y)           # avoid boundary outside of image
+                xmax, ymax = min(W, x + w), min(H, y + h)   # avoid boundary outside of image
+                prediction[label] = [(xmin, ymin), (xmax, ymax)]
             else:
                 if self.print_message: print('%-16s Not enough keypoints match are found - %d/%d' % (label, len(max_matches), self.min_match_thresh[label]))
 
